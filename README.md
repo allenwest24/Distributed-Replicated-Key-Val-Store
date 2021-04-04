@@ -1,2 +1,13 @@
 # Distributed-Replicated-Key-Val-Store
-A key-value datastore that supports API calls from clients and utilizes a homemade version of Raft to gurantee consistency.
+
+## High-Level Approach:
+
+- As a first step for this project I read the suggested paper on Raft @ https://raft.github.io/raft.pdf and took the following notes:
+  - 
+
+# Challenges Faced:
+
+
+
+# Testing:
+
