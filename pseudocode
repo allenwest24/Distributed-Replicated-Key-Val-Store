@@ -16,6 +16,7 @@ voted_this_term = False
 leader = 'FFFF'
 # Track our votes received in this term.
 votes_for_me = 0
+
 # Your ID number
 my_id = sys.argv[1]
 # The ID numbers of all the other replicas
@@ -26,6 +27,7 @@ replica_ids = sys.argv[2:]
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
 sock.connect(my_id)
 
+# We want to start with the current term as the last so that our election timeout picks the best server to start with.
 last = time.time()
 
 # Depending on terms specified elsewhere, this will start a new election for a leader.
@@ -42,11 +44,7 @@ def begin_election():
   voted_this_term = True
 
   # Issue RequestVote RPC to each of the other servers in the cluster.
-  requestvotemsg = {}
-  requestvotemsg['type'] = 'rvm'
-  requestvotemsg['src'] = my_id  
-  requestvotemsg['dst'] = 'FFFF'
-  requestvotemsg['leader'] = leader
+  requestvotemsg = {'type': 'rvm', 'src': my_id, 'dst': 'FFFF', 'leader': 'FFFF', 'term': term}
   sock.send(json.dumps(requestvotemsg))
   return
 
@@ -76,7 +74,7 @@ while True:
         # Construct a resposne message.
         msg_back['src'] = msg['dst']
         msg_back['dst'] = msg['src']
-        msg_back['leader'] = msg['leader']
+        msg_back['leader'] = leader
         msg_back['MID'] = msg['MID']
 
       # If we received a GET request.
@@ -84,7 +82,7 @@ while True:
         # Construct a response message.
         msg_back['src'] = msg['dst']
         msg_back['dst'] = msg['src']
-        msg_back['leader'] = msg['leader']
+        msg_back['leader'] = leader
         # If we have the key-val for this GET request.
         if msg['key'] in kvs:
           msg_back['type'] = 'fail' # TODO: Change this to 'ok' later on.
@@ -100,23 +98,43 @@ while True:
     # Handle heartbeats.
     elif msg['type'] == 'hb':
       last = time.time()
-      if leader != msg['leader']:
-        leader = msg['leader']
+      leader = msg['leader']
+      term = msg['term']
+      state = 'follower'
+      votes_for_me = 0
+      voted_this_term = False
       print '%s received a HB from %s' % (msg['dst'], msg['src'])
     
     # If request to vote is received and we haven't voted, update term, vote, update that we have voted this term.
     elif msg['type'] == 'rvm':
+      #leader = 'FFFF'
+      if msg['term'] > term:
+        leader = 'FFFF'
+        voted_this_term = False
+        term = msg['term']
       if not voted_this_term:
-        vote = {}
-        vote['src'] = my_id
-        vote['dst'] = msg['src']
-        vote['type'] = 'vote'
-        vote['leader'] = leader
-      print("RECEIEVED YA REQ")
+        vote = {'src': my_id, 'dst': msg['src'], 'type': 'vote', 'leader': leader, 'term': term}
+        sock.send(json.dumps(vote))
+        print("voted for", msg['src'])
+      voted_this_term = True
     
     # If we receive a vote.
     elif msg['type'] == 'vote':
-      print('thanks')
+      print('recieved a vote!', str(my_id))
+      if msg['term'] == term and leader == 'FFFF':
+        print('terms match for this vote')
+        votes_for_me += 1
+        if votes_for_me >= len(replica_ids) / 2:
+          # We won! Send an initial heart beat so everyone knows the results.
+          heartbeat = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'hb', 'term': term}
+          sock.send(json.dumps(heartbeat))
+
+          # Reset all values in preparation for a new election.
+          state = 'leader'
+          leader = my_id
+          voted_this_term = False
+          votes_for_me = 0
+          print('new leader!', my_id)
 
     clock = time.time()
     # If a follower receives no communication in their election timeout window, there is no visible leader and begins an election.
@@ -124,7 +142,7 @@ while True:
       print(str(clock - last))
       # Leaders send periodic heartbeats to all followers in order to maintain their authority.
       if state == 'leader':
-        msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'hb'}
+        msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'hb', 'term': term}
         sock.send(json.dumps(msg))
         print '%s sending a HB to %s' % (msg['src'], msg['dst'])
       # If a follower receives no communication in their election timeout window, there is no visible leader and we begin an election.
