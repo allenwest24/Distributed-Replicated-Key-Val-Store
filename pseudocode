@@ -7,7 +7,7 @@ kvs = {}
 # When servers start up, they begin as followers.
 state = "follower"
 # This servers as the election timeout for this server.
-elec_to = random.randint(2, 10)
+elec_to = round(random.uniform(1, 10), 6)
 # The term we are on.
 term = 0
 # Default of no.
@@ -36,12 +36,17 @@ def begin_election():
   global term
   global voted_this_term
   global votes_for_me
+  global leader
+
+  print(str(leader) + " has been dethroned as leader.")
+  print(str(my_id) + " becomes a candidate!")
   # To begin an election, a follower increments its current term.
   term += 1
   # Transition to candidate state.
   state = 'candidate'
   votes_for_me += 1
   voted_this_term = True
+  leader = 'FFFF'
 
   # Issue RequestVote RPC to each of the other servers in the cluster.
   requestvotemsg = {'type': 'rvm', 'src': my_id, 'dst': 'FFFF', 'leader': 'FFFF', 'term': term}
@@ -99,7 +104,6 @@ while True:
             msg_back['type'] = 'fail'
         elif leader == 'FFFF':
           msg_back['type'] = 'fail'
-          #print('get failure')
         else:
           msg_back['type'] = 'redirect'
         msg_back['src'] = my_id
@@ -117,7 +121,7 @@ while True:
       state = 'follower'
       votes_for_me = 0
       voted_this_term = False
-      print '%s received a HB from %s' % (msg['dst'], msg['src'])
+      #print '%s received a HB from %s' % (msg['dst'], msg['src'])
     
     # If request to vote is received and we haven't voted, update term, vote, update that we have voted this term.
     elif msg['type'] == 'rvm':
@@ -126,34 +130,33 @@ while True:
         leader = 'FFFF'
         voted_this_term = False
         term = msg['term']
+        state = 'follower'
+        votes_for_me = 0
       if not voted_this_term:
         vote = {'src': my_id, 'dst': msg['src'], 'type': 'vote', 'leader': leader, 'term': term}
         sock.send(json.dumps(vote))
-        print("voted for", msg['src'])
+        #print("voted for", msg['src'])
       voted_this_term = True
     
     # If we receive a vote.
     elif msg['type'] == 'vote':
-      print('recieved a vote!', str(my_id))
       if msg['term'] == term and leader == 'FFFF':
-        print('terms match for this vote')
         votes_for_me += 1
-        if votes_for_me >= len(replica_ids) / 2:
+        if votes_for_me >= len(replica_ids) / 2 and state == "candidate":
           # We won! Send an initial heart beat so everyone knows the results.
           heartbeat = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'hb', 'term': term}
           sock.send(json.dumps(heartbeat))
+          print(my_id + " has won the election. A heartbeat has been sent out")
 
           # Reset all values in preparation for a new election.
           state = 'leader'
           leader = my_id
           voted_this_term = False
           votes_for_me = 0
-          print('new leader!', my_id)
 
     clock = time.time()
     # If a follower receives no communication in their election timeout window, there is no visible leader and begins an election.
     if clock - last > elec_to:
-      print(str(clock - last))
       # Leaders send periodic heartbeats to all followers in order to maintain their authority.
       if state == 'leader':
         msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'hb', 'term': term}
