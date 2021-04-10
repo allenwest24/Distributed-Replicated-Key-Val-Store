@@ -69,12 +69,15 @@ while True:
         if msg['src'] == leader or leader == my_id:
           # Try to store locally.
           kvs[msg['key']] = msg['value']
+          if leader == my_id:
+            replicated_log = {'src': my_id, 'dst': 'FFFF', 'MID': msg['MID'], 'type': 'put', 'key': msg['key'], 'value': msg['value'], 'leader': leader}
+            sock.send(json.dumps(replicated_log))
           msg_back['type'] = 'ok' 
-          print("put OK!")
+          #print("put OK!")
         # Rdirect to actual leader.
         elif leader == 'FFFF':
           msg_back['type'] = 'fail'
-          print('put failure')
+          #print('put failure')
         else:
           msg_back['type'] = 'redirect'
         # Construct a response message.
@@ -90,13 +93,13 @@ while True:
           if msg['key'] in kvs:
             msg_back['type'] = 'ok' 
             msg_back['value'] = kvs[msg['key']] 
-            print("get ok!")
+            #print("get ok!")
           # If the GET request fails.
           else:
             msg_back['type'] = 'fail'
         elif leader == 'FFFF':
           msg_back['type'] = 'fail'
-          print('get failure')
+          #print('get failure')
         else:
           msg_back['type'] = 'redirect'
         msg_back['src'] = my_id
