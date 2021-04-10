@@ -1,6 +1,10 @@
 #!/usr/bin/env python
+# Imports.
 
 import sys, socket, select, time, json, random
+
+#--------------------------------------------------------------------------------------------------
+# Global Variables.
 
 # The method chosen to store is obviously a key-val struct.
 kvs = {}
@@ -16,19 +20,23 @@ voted_this_term = False
 leader = 'FFFF'
 # Track our votes received in this term.
 votes_for_me = 0
+# Start with current time.
+last = time.time()
+
+#--------------------------------------------------------------------------------------------------
+# Global Constants.
 
 # Your ID number
 my_id = sys.argv[1]
 # The ID numbers of all the other replicas
 replica_ids = sys.argv[2:]
-
 # Connect to the network. All messages to/from other replicas and clients will
 # occur over this socket
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
 sock.connect(my_id)
 
-# We want to start with the current term as the last so that our election timeout picks the best server to start with.
-last = time.time()
+#--------------------------------------------------------------------------------------------------
+# Helper Methods.
 
 # Depending on terms specified elsewhere, this will start a new election for a leader.
 def begin_election():
@@ -53,20 +61,21 @@ def begin_election():
   sock.send(json.dumps(requestvotemsg))
   return
 
+#--------------------------------------------------------------------------------------------------
+# Main Algorithm.
+
 while True:
   ready = select.select([sock], [], [], 0.1)[0]
-
   if sock in ready:
     msg_raw = sock.recv(32768)
-
     if len(msg_raw) == 0: continue
     msg = json.loads(msg_raw)
 
     if msg['type'] == 'redirect':
         print('fucking idiot')
+
     # If messages are of type GET or PUT.
     if msg['type'] in ['get', 'put']:
-      #print '%s received a %s from %s' % (msg['dst'], msg['type'], msg['src'])
       msg_back = {}
 
       # If we received a PUT request.
@@ -78,11 +87,9 @@ while True:
             replicated_log = {'src': my_id, 'dst': 'FFFF', 'MID': msg['MID'], 'type': 'put', 'key': msg['key'], 'value': msg['value'], 'leader': leader}
             sock.send(json.dumps(replicated_log))
           msg_back['type'] = 'ok' 
-          #print("put OK!")
         # Rdirect to actual leader.
         elif leader == 'FFFF':
           msg_back['type'] = 'fail'
-          #print('put failure')
         else:
           msg_back['type'] = 'redirect'
         # Construct a response message.
@@ -98,7 +105,6 @@ while True:
           if msg['key'] in kvs:
             msg_back['type'] = 'ok' 
             msg_back['value'] = kvs[msg['key']] 
-            #print("get ok!")
           # If the GET request fails.
           else:
             msg_back['type'] = 'fail'
@@ -121,11 +127,9 @@ while True:
       state = 'follower'
       votes_for_me = 0
       voted_this_term = False
-      #print '%s received a HB from %s' % (msg['dst'], msg['src'])
     
     # If request to vote is received and we haven't voted, update term, vote, update that we have voted this term.
     elif msg['type'] == 'rvm':
-      #leader = 'FFFF'
       if msg['term'] > term:
         leader = 'FFFF'
         voted_this_term = False
@@ -135,7 +139,6 @@ while True:
       if not voted_this_term:
         vote = {'src': my_id, 'dst': msg['src'], 'type': 'vote', 'leader': leader, 'term': term}
         sock.send(json.dumps(vote))
-        #print("voted for", msg['src'])
       voted_this_term = True
     
     # If we receive a vote.
