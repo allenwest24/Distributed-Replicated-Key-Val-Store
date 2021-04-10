@@ -57,6 +57,8 @@ while True:
     if len(msg_raw) == 0: continue
     msg = json.loads(msg_raw)
 
+    if msg['type'] == 'redirect':
+        print('fucking idiot')
     # If messages are of type GET or PUT.
     if msg['type'] in ['get', 'put']:
       #print '%s received a %s from %s' % (msg['dst'], msg['type'], msg['src'])
@@ -64,33 +66,42 @@ while True:
 
       # If we received a PUT request.
       if msg['type'] == 'put':
-        # Try to store locally.
-        try:
+        if msg['src'] == leader or leader == my_id:
+          # Try to store locally.
           kvs[msg['key']] = msg['value']
-          msg_back['type'] = 'fail' # TODO: Change this to 'ok' later on.
-        # If the PUT fails.
-        except:
+          msg_back['type'] = 'ok' 
+          print("put OK!")
+        # Rdirect to actual leader.
+        elif leader == 'FFFF':
           msg_back['type'] = 'fail'
-        # Construct a resposne message.
-        msg_back['src'] = msg['dst']
+          print('put failure')
+        else:
+          msg_back['type'] = 'redirect'
+        # Construct a response message.
+        msg_back['src'] = my_id
         msg_back['dst'] = msg['src']
         msg_back['leader'] = leader
         msg_back['MID'] = msg['MID']
 
       # If we received a GET request.
       elif msg['type'] == 'get':
-        # Construct a response message.
-        msg_back['src'] = msg['dst']
+        if msg['src'] == leader or leader == my_id:
+          # If we have the key-val for this GET request.
+          if msg['key'] in kvs:
+            msg_back['type'] = 'ok' 
+            msg_back['value'] = kvs[msg['key']] 
+            print("get ok!")
+          # If the GET request fails.
+          else:
+            msg_back['type'] = 'fail'
+        elif leader == 'FFFF':
+          msg_back['type'] = 'fail'
+          print('get failure')
+        else:
+          msg_back['type'] = 'redirect'
+        msg_back['src'] = my_id
         msg_back['dst'] = msg['src']
         msg_back['leader'] = leader
-        # If we have the key-val for this GET request.
-        if msg['key'] in kvs:
-          msg_back['type'] = 'fail' # TODO: Change this to 'ok' later on.
-          msg_back['value'] = kvs[msg['key']] 
-        # If the GET request fails.
-        else:
-          msg_back['type'] = 'fail'
-                                
         msg_back['MID'] = msg['MID']
 
       sock.send(json.dumps(msg_back))
