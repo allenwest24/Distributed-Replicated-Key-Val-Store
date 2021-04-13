@@ -11,7 +11,7 @@ kvs = {}
 # When servers start up, they begin as followers.
 state = "follower"
 # This servers as the election timeout for this server.
-elec_to = round(random.uniform(1, 10), 6)
+elec_to = round(random.uniform(1, 10), 6) #TODO: Make this smaller once election bugs are fixed.
 # The term we are on.
 term = 0
 # Default of no.
@@ -40,6 +40,7 @@ sock.connect(my_id)
 
 # Depending on terms specified elsewhere, this will start a new election for a leader.
 def begin_election():
+  # Import the necessary global variables.
   global state
   global term
   global voted_this_term
@@ -52,8 +53,10 @@ def begin_election():
   term += 1
   # Transition to candidate state.
   state = 'candidate'
+  # The candidate will vote for itself.
   votes_for_me += 1
   voted_this_term = True
+  # The leader cannot declare itself the leader until it receives the majority vote, so the leader becomes unknown and the rfv message will trigger the other servers to change this on their end as well.
   leader = 'FFFF'
 
   # Issue RequestVote RPC to each of the other servers in the cluster.
@@ -65,31 +68,39 @@ def begin_election():
 # Main Algorithm.
 
 while True:
+  # Find the availability of the socket.
   ready = select.select([sock], [], [], 0.1)[0]
   if sock in ready:
+    # Receive and decode client requests.
     msg_raw = sock.recv(32768)
     if len(msg_raw) == 0: continue
     msg = json.loads(msg_raw)
 
+    # Handle redirect requests.
+    # TODO: Implement.
     if msg['type'] == 'redirect':
         print('fucking idiot')
 
-    # If messages are of type GET or PUT.
+    # If requests are of type GET or PUT.
     if msg['type'] in ['get', 'put']:
       msg_back = {}
 
       # If we received a PUT request.
       if msg['type'] == 'put':
+        # Put requests should go through the leader. Therefore, we only actually handle them if they come from the leader or if we ARE the leader.
+        # This implementation is called 'strong leader'.
         if msg['src'] == leader or leader == my_id:
-          # Try to store locally.
+          # The leader accepts log entries from clients.
           kvs[msg['key']] = msg['value']
+          # The leader will replicate log entries on the other servers.
           if leader == my_id:
             replicated_log = {'src': my_id, 'dst': 'FFFF', 'MID': msg['MID'], 'type': 'put', 'key': msg['key'], 'value': msg['value'], 'leader': leader}
             sock.send(json.dumps(replicated_log))
           msg_back['type'] = 'ok' 
-        # Rdirect to actual leader.
+        # There is no current leader yet, try again shortly.
         elif leader == 'FFFF':
           msg_back['type'] = 'fail'
+        # Redirect to the actual leader.
         else:
           msg_back['type'] = 'redirect'
         # Construct a response message.
@@ -100,6 +111,7 @@ while True:
 
       # If we received a GET request.
       elif msg['type'] == 'get':
+        # The strong leader requirements here are the same as for put() requests.
         if msg['src'] == leader or leader == my_id:
           # If we have the key-val for this GET request.
           if msg['key'] in kvs:
@@ -108,19 +120,26 @@ while True:
           # If the GET request fails.
           else:
             msg_back['type'] = 'fail'
+        # If there is no elected leader yet, we will try again in a little bit.
         elif leader == 'FFFF':
           msg_back['type'] = 'fail'
+        # Enforce strong leadership.
         else:
           msg_back['type'] = 'redirect'
+
+        # Forge the rest of the message.  
         msg_back['src'] = my_id
         msg_back['dst'] = msg['src']
         msg_back['leader'] = leader
         msg_back['MID'] = msg['MID']
 
+      # Regardless of the message changes that were made above, send the previously constructed message.
       sock.send(json.dumps(msg_back))
 
     # Handle heartbeats.
-    elif msg['type'] == 'hb':
+    # If the supposed leader's term is at least as big as the current server's term, then we recognize the leader as legitimate.
+    # Otherwise we reject and continue in the current state.
+    elif msg['type'] == 'hb' and msg['term'] >= term:
       last = time.time()
       leader = msg['leader']
       term = msg['term']
@@ -145,8 +164,11 @@ while True:
     elif msg['type'] == 'vote':
       if msg['term'] == term and leader == 'FFFF':
         votes_for_me += 1
+        # The required amount of votes is a majority (half plus themselves.)
+        # This allows both a lot of room for failed servers, as well as insurance that there will only be one leader at a time.
         if votes_for_me >= len(replica_ids) / 2 and state == "candidate":
-          # We won! Send an initial heart beat so everyone knows the results.
+          # This candidate has won.
+          # Send a heartbeat to all other servers to establish the authority and to prevent new elections.
           heartbeat = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'hb', 'term': term}
           sock.send(json.dumps(heartbeat))
           print(my_id + " has won the election. A heartbeat has been sent out")
