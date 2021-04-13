@@ -11,7 +11,7 @@ kvs = {}
 # When servers start up, they begin as followers.
 state = "follower"
 # This servers as the election timeout for this server.
-elec_to = round(random.uniform(1, 10), 6) #TODO: Make this smaller once election bugs are fixed.
+elec_to = round(random.uniform(0.5, 4), 6) #TODO: Make this smaller once election bugs are fixed.
 # The term we are on.
 term = 0
 # Default of no.
@@ -99,7 +99,8 @@ while True:
           msg_back['type'] = 'ok' 
         # There is no current leader yet, try again shortly.
         elif leader == 'FFFF':
-          msg_back['type'] = 'fail'
+          #msg_back['type'] = 'fail'
+          msg_back['type'] = 'redirect'
         # Redirect to the actual leader.
         else:
           msg_back['type'] = 'redirect'
@@ -188,6 +189,6 @@ while True:
         sock.send(json.dumps(msg))
         print '%s sending a HB to %s' % (msg['src'], msg['dst'])
       # If a follower receives no communication in their election timeout window, there is no visible leader and we begin an election.
-      elif state == 'follower':
+      elif state == 'follower' and not voted_this_term:
         begin_election()
       last = clock
