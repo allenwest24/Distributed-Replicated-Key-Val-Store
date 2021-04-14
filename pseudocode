@@ -7,6 +7,7 @@ import sys, socket, select, time, json, random
 # Global Variables.
 
 # The method chosen to store is obviously a key-val struct.
+log = {}
 kvs = {}
 # When servers start up, they begin as followers.
 state = "follower"
@@ -89,13 +90,15 @@ while True:
       if msg['type'] == 'put':
         # Put requests should go through the leader. Therefore, we only actually handle them if they come from the leader or if we ARE the leader.
         # This implementation is called 'strong leader'.
-        if msg['src'] == leader or leader == my_id:
+        if msg['src'] == leader:
           # The leader accepts log entries from clients.
           kvs[msg['key']] = msg['value']
+          msg_back['type'] = 'ok'
           # The leader will replicate log entries on the other servers.
-          if leader == my_id:
-            replicated_log = {'src': my_id, 'dst': 'FFFF', 'MID': msg['MID'], 'type': 'put', 'key': msg['key'], 'value': msg['value'], 'leader': leader}
-            sock.send(json.dumps(replicated_log))
+        elif leader == my_id:
+          kvs[msg['key']] = msg['value']
+          replicated_log = {'src': my_id, 'dst': 'FFFF', 'MID': msg['MID'], 'type': 'put', 'key': msg['key'], 'value': msg['value'], 'leader': leader}
+          sock.send(json.dumps(replicated_log))
           msg_back['type'] = 'ok' 
         # There is no current leader yet, try again shortly.
         elif leader == 'FFFF':
@@ -157,6 +160,7 @@ while True:
         state = 'follower'
         votes_for_me = 0
       if not voted_this_term:
+        last = time.time()
         vote = {'src': my_id, 'dst': msg['src'], 'type': 'vote', 'leader': leader, 'term': term}
         sock.send(json.dumps(vote))
       voted_this_term = True
