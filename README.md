@@ -33,14 +33,20 @@
     - AppendEntries replicate log entries and serve as a heart beat.
   - It is possible to have split election results, but Raft uses randomized elction tinmeouts to solve this. 
   - Leaders send entries as log updates and fills everyone in on when it safe to commit these entries.
+- This was the portion of the task I expected to complete by the milsetone.
+- I started by following the recommended path of development in the project description but quickly veered off due to a low attention span.
+- I implemented a easy version of put and get using a dict and not utilizing the log vs commit portion of RAFT quite yet. 
+- From there I implemented the election process to its full potential which took a long time.
 
 ## Challenges Faced:
-
-
+- The concepts of this project definitely took a long time to learn, and it was almost impossible for me to jump into this without reading very carefully everything about RAFT.
+- Another challenge was the election process because there were so many moving parts. It was tough to differentiate when to listen to votes and when to reset the states of all parrticipating nodes.
+- Consistency is another key issue for my algorithm currently and I think it is due to the fact that I am not using confirmations and sends the same way I'm doing the heartbeats. Essentially, in my version heartbeats and puts are not the same tye of messages and I think I need to change this for better consistency.
+- If I set the timeouts to be a small and quick range, there are too many ties. I think once I implement this in Go I will illiminate this problem.
 
 ## Testing:
-
-
+- I have been using the test.py and run.py script given to us by the professor, because most of this project needs to be simulated in order to test it.
+- In addition to this I used a lot of print statements to see the exact flow and progress and this helped me debug faster.
 
 ## Resources:
 - Raft concepts: https://raft.github.io/raft.pdf
