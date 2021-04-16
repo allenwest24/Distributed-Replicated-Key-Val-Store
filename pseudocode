@@ -12,7 +12,7 @@ kvs = {}
 # When servers start up, they begin as followers.
 state = "follower"
 # This servers as the election timeout for this server.
-elec_to = round(random.uniform(0.5, 4), 6) #TODO: Make this smaller once election bugs are fixed.
+elec_to = round(random.uniform(0.5, 10), 6) #TODO: Make this smaller once election bugs are fixed.
 # The term we are on.
 term = 0
 # Default of no.
@@ -48,8 +48,8 @@ def begin_election():
   global votes_for_me
   global leader
 
-  print(str(leader) + " has been dethroned as leader.")
-  print(str(my_id) + " becomes a candidate!")
+  #print(str(leader) + " has been dethroned as leader.")
+  #print(str(my_id) + " becomes a candidate!")
   # To begin an election, a follower increments its current term.
   term += 1
   # Transition to candidate state.
@@ -79,8 +79,8 @@ while True:
 
     # Handle redirect requests.
     # TODO: Implement.
-    if msg['type'] == 'redirect':
-        print('fucking idiot')
+    #if msg['type'] == 'redirect':
+        #print('redirect message received.')
 
     # If requests are of type GET or PUT.
     if msg['type'] in ['get', 'put']:
@@ -92,6 +92,7 @@ while True:
         # This implementation is called 'strong leader'.
         if msg['src'] == leader:
           # The leader accepts log entries from clients.
+          log[msg['key']] = msg['value']
           kvs[msg['key']] = msg['value']
           msg_back['type'] = 'ok'
           # The leader will replicate log entries on the other servers.
@@ -137,6 +138,10 @@ while True:
         msg_back['leader'] = leader
         msg_back['MID'] = msg['MID']
 
+      elif msg['type'] == 'commit':
+          del log[msg['key']]
+          kvs[msg['key']] = msg['value']
+
       # Regardless of the message changes that were made above, send the previously constructed message.
       sock.send(json.dumps(msg_back))
 
@@ -176,7 +181,7 @@ while True:
           # Send a heartbeat to all other servers to establish the authority and to prevent new elections.
           heartbeat = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'hb', 'term': term}
           sock.send(json.dumps(heartbeat))
-          print(my_id + " has won the election. A heartbeat has been sent out")
+          #print(my_id + " has won the election. A heartbeat has been sent out")
 
           # Reset all values in preparation for a new election.
           state = 'leader'
@@ -191,8 +196,11 @@ while True:
       if state == 'leader':
         msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'hb', 'term': term}
         sock.send(json.dumps(msg))
-        print '%s sending a HB to %s' % (msg['src'], msg['dst'])
+        #print '%s sending a HB to %s' % (msg['src'], msg['dst'])
       # If a follower receives no communication in their election timeout window, there is no visible leader and we begin an election.
       elif state == 'follower' and not voted_this_term:
+        begin_election()
+      # If there is a tie, so no one gains a majority of the votes, the candidate should timeout and start a new election.
+      elif state == 'candidate':
         begin_election()
       last = clock
