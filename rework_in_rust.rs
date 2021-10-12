@@ -1,4 +1,4 @@
-// This file is the Rust re-work of the Python Distributed KVS algorithm I designed loosely based
+// This file is the Rust re-work (obviously a lot left to do) of the Python Distributed KVS algorithm I designed loosely based
 // on Raft.
 
 // Imports.
