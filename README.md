@@ -45,7 +45,7 @@
 - If I set the timeouts to be a small and quick range, there are too many ties. I think once I implement this in Go I will illiminate this problem.
 
 ## Testing:
-- I have been using the test.py and run.py script given to us by the professor, because most of this project needs to be simulated in order to test it.
+- I have been using the test.py and run.py script tor un simulations to test this implementation.
 - In addition to this I used a lot of print statements to see the exact flow and progress and this helped me debug faster.
 
 ## Resources:
